@@ -15,13 +15,15 @@
 # For further info, check https://github.com/canonical/charmcraft
 
 """The Store API handling."""
+import contextlib
 import dataclasses
 import datetime
+import itertools
 import os
 import platform
 import time
 from functools import wraps
-from typing import Any, Literal, Optional
+from typing import Any, Literal, Optional, List, Collection, Sequence
 
 import craft_store
 from craft_cli import CraftError, emit
@@ -125,6 +127,14 @@ class Base:
 
 
 @dataclasses.dataclass(frozen=True)
+class ResourceBase:
+    """Charmcraft-specific resource base model."""
+    name: str
+    channel: str
+    architectures: list[str]
+
+
+@dataclasses.dataclass(frozen=True)
 class Revision:
     """Charmcraft-specific store name revision model.
 
@@ -162,6 +172,7 @@ class ResourceRevision:
     revision: int
     created_at: datetime.datetime
     size: int
+    bases: list[ResourceBase]
 
 
 @dataclasses.dataclass(frozen=True)
@@ -257,10 +268,12 @@ def _build_revision(item: dict[str, Any]) -> Revision:
 
 def _build_resource_revision(item):
     """Build a Revision from a response item."""
+    bases = [ResourceBase(**base) for base in item.get("bases", ())]
     return ResourceRevision(
         revision=item["revision"],
         created_at=parser.parse(item["created-at"]),
         size=item["size"],
+        bases=bases,
     )
 
 
@@ -499,10 +512,30 @@ class Store:
         return self._upload(endpoint, filepath)
 
     @_store_client_wrapper()
-    def upload_resource(self, charm_name, resource_name, resource_type, filepath):
+    def upload_resource(self, charm_name, resource_name, resource_type, filepath, bases: Sequence[dict] = ()):
         """Upload the content of filepath to the indicated resource."""
+        existing_revisions: list[ResourceRevision] = self.list_resource_revisions(charm_name, resource_name)
+
         endpoint = f"/v1/charm/{charm_name}/resources/{resource_name}/revisions"
-        return self._upload(endpoint, filepath, extra_fields={"type": resource_type})
+        extra_fields = {"type": resource_type}
+        if bases:
+            extra_fields["bases"] = bases
+        result = self._upload(endpoint, filepath, extra_fields=extra_fields)
+
+        # If a resource already exists, the store doesn't update its architectures.
+        existing_revision_numbers = [r.revision for r in existing_revisions]
+        if bases and result.revision in existing_revision_numbers:
+            update_endpoint = f"/v1/charm/{charm_name}/resources/{resource_name}/revisions"
+            existing_revision = existing_revisions[existing_revision_numbers.index(result.revision)]
+            processed_bases = [ResourceBase(**base) for base in bases]
+            update_bases = _merge_resource_bases(*existing_revision.bases, *processed_bases)
+
+            self._client.request_urlpath_json(
+                "PATCH", update_endpoint, json={"resource-revision-updates": [
+                    {"revision": result.revision, "bases": [dataclasses.asdict(b) for b in update_bases]}]}
+            )
+
+        return result
 
     @_store_client_wrapper()
     def list_revisions(self, name):
@@ -650,3 +683,22 @@ class Store:
         endpoint = f"/v1/charm/{charm_name}/resources/{resource_name}/oci-image/blob"
         return self._client.request_urlpath_text("POST", endpoint, json=payload)
         # the response here is returned as is, because it's opaque to charmcraft
+
+
+def _merge_resource_bases(*bases: ResourceBase) -> list[ResourceBase]:
+    result: list[ResourceBase] = []
+    done: list[tuple[str, str]] = []
+    for base in bases:
+        if (base.name, base.channel) in done:
+            continue
+        architectures = set(base.architectures)
+        for other_base in bases:
+            if (base.name, base.channel) == (other_base.name, other_base.channel):
+                architectures |= set(other_base.architectures)
+        if len(architectures) > 1:
+            with contextlib.suppress(KeyError):
+                architectures.remove("all")
+        result.append(ResourceBase(name=base.name, channel=base.channel, architectures=sorted(architectures)))
+        done.append((base.name, base.channel))
+
+    return result

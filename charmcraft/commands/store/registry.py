@@ -24,6 +24,7 @@ import json
 import os
 import tarfile
 import tempfile
+from pprint import pprint
 from typing import Any
 from urllib.request import parse_http_list, parse_keqv_list
 
@@ -167,7 +168,9 @@ class OCIRegistry:
         """
         emit.progress("Checking if manifest is already uploaded")
         url = self._get_url(f"manifests/{reference}")
-        return self._is_item_already_uploaded(url)
+        result = self._is_item_already_uploaded(url)
+        emit.debug(f"Already uploaded: {result}")
+        return result
 
     def is_blob_already_uploaded(self, reference):
         """Verify if the blob is already uploaded, using a generic reference.
@@ -333,7 +336,7 @@ class LocalDockerdInterface:
             if image_info["RepoDigests"] is None:
                 continue
             if any(digest in repo_digest for repo_digest in image_info["RepoDigests"]):
-                return image_info
+                return self.get_image_info_from_id(image_info["Id"])
         return None
 
     def get_streamed_image_content(self, image_id: str) -> requests.Response:
@@ -352,7 +355,7 @@ class ImageHandler:
         """Verify if the image is present in the registry."""
         return self.registry.is_manifest_already_uploaded(digest)
 
-    def _extract_file(self, image_tar: str, name: str, compress: bool = False) -> (str, int, str):
+    def _extract_file(self, image_tar, name: str, compress: bool = False) -> (str, int, str):
         """Extract a file from the tar and return its info. Optionally, gzip the content."""
         emit.progress(f"Extracting file {name!r} from local tar (compress={compress})")
         src_filehandler = image_tar.extractfile(name)

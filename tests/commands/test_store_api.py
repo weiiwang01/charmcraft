@@ -925,6 +925,23 @@ def test_upload_resources_endpoint(config):
     assert result == test_results
 
 
+@pytest.mark.usefixtures("client_mock")
+@pytest.mark.parametrize("architectures", [["amd64"], ["armhf", "arm64"]])
+def test_upload_resources_endpoint_architectures(config, architectures):
+    """The resource upload prepares ok the endpoint and calls the generic _upload."""
+    store = Store(config.charmhub)
+    test_results = "test-results"
+
+    with patch.object(store, "_upload") as mock:
+        mock.return_value = test_results
+        result = store.upload_resource("test-charm", "test-resource", "test-type", "test-filepath", architectures=architectures)
+    expected_endpoint = "/v1/charm/test-charm/resources/test-resource/revisions"
+    mock.assert_called_once_with(
+        expected_endpoint, "test-filepath", extra_fields={"type": "test-type", "architectures": architectures}
+    )
+    assert result == test_results
+
+
 def test_upload_including_extra_parameters(client_mock, emitter, config):
     """Verify that the upload includes extra parameters if given."""
     store = Store(config.charmhub)

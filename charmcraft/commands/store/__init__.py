@@ -42,6 +42,7 @@ from charmcraft import parts, utils, const
 
 from charmcraft.commands.store.registry import ImageHandler, OCIRegistry, LocalDockerdInterface
 from charmcraft.commands.store.store import Store, Entity
+from charmcraft.models.charmcraft import Base
 
 if TYPE_CHECKING:
     from argparse import ArgumentParser, Namespace
@@ -1817,17 +1818,29 @@ class UploadResourceCommand(BaseCommand):
                 'The digest (remote or local) or id (local, exclude "sha256:") of the OCI image'
             ),
         )
+        parser.add_argument(
+            "--arch",
+            # TODO: Limit architecture choices to supported architectures + "all"
+            type=lambda arch: arch.split(","),
+            help="The architectures valid for this resource. If none are provided, the resource is uploaded without architecture information.",
+        )
 
     def run(self, parsed_args):
         """Run the command."""
         store = Store(self.config.charmhub)
+
+        bases = []
 
         if parsed_args.filepath:
             resource_filepath = parsed_args.filepath
             resource_filepath_is_temp = False
             resource_type = ResourceType.file
             emit.progress(f"Uploading resource directly from file {str(resource_filepath)!r}.")
+            if parsed_args.arch:
+                bases = [dict(name="all", channel="all", architectures=parsed_args.arch)]
         elif parsed_args.image:
+            if parsed_args.arch:
+                raise ArgumentParsingError("--arch cannot be included when specifying an image.")
             credentials = store.get_oci_registry_credentials(
                 parsed_args.charm_name, parsed_args.resource_name
             )
@@ -1888,11 +1901,16 @@ class UploadResourceCommand(BaseCommand):
             resource_filepath_is_temp = True
             resource_type = ResourceType.oci_image
 
+            if arch := image_info.get("Architecture"):
+                arch = utils.ARCH_TRANSLATIONS.get(arch, arch)
+                bases.append({"name": "all", "channel": "all", "architectures": [arch]})
+
         result = store.upload_resource(
             parsed_args.charm_name,
             parsed_args.resource_name,
             resource_type,
             resource_filepath,
+            bases=bases,
         )
 
         # clean the filepath if needed
@@ -1965,6 +1983,7 @@ class ListResourceRevisionsCommand(BaseCommand):
                     "revision": item.revision,
                     "created at": utils.format_timestamp(item.created_at),
                     "size": item.size,
+                    "bases": [dataclasses.asdict(base) for base in item.bases],
                 }
                 for item in result
             ]
@@ -1975,7 +1994,7 @@ class ListResourceRevisionsCommand(BaseCommand):
             emit.message("No revisions found.")
             return
 
-        headers = ["Revision", "Created at", "Size"]
+        headers = ["Revision", "Created at", "Size", "Architectures"]
         custom_alignment = ["left", "left", "right"]
         result.sort(key=attrgetter("revision"), reverse=True)
         data = [
@@ -1983,6 +2002,7 @@ class ListResourceRevisionsCommand(BaseCommand):
                 item.revision,
                 utils.format_timestamp(item.created_at),
                 naturalsize(item.size, gnu=True),
+                ",".join(arch for arch in item.bases[0].architectures),
             )
             for item in result
         ]
