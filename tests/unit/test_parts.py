@@ -24,7 +24,6 @@ FULLY_DEFINED_STRICT_CHARM = {
     "plugin": "charm",
     "charm-strict-dependencies": True,
     "charm-binary-python-packages": [],
-    "charm-python-packages": [],
     "charm-requirements": [],
     "charm-entrypoint": "src/charm.py",
 }
@@ -66,10 +65,6 @@ def test_partconfig_strict_dependencies_success(fs: FakeFilesystem, part_config,
 @pytest.mark.parametrize(
     ("part_config", "message"),
     [
-        (
-            {"charm-requirements": ["req.txt"], "charm-python-packages": ["ops"]},
-            "'charm-python-packages' must not be set if 'charm-strict-dependencies' is enabled",
-        ),
         (
             {"charm-requirements": ["req.txt"], "charm-binary-python-packages": ["not-here"]},
             "All dependencies must be specified in requirements files for strict dependencies.",

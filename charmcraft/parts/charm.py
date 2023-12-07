@@ -20,7 +20,7 @@ import re
 import shlex
 import sys
 from contextlib import suppress
-from typing import Any, cast
+from typing import Any, cast, Literal, Annotated
 
 import pydantic
 from craft_parts import Step, callbacks, plugins
@@ -43,19 +43,26 @@ class CharmPluginProperties(plugins.PluginProperties, plugins.PluginModel):
 
     source: str
     charm_strict_dependencies: bool = False
-    """Whether to select strict dependencies only.
-
-    If true, ``charm-strict-dependencies`` will enforce that all dependencies, direct or indirect,
-    be specified within a requirements file and requires at least one requirements file in
-    ``charm-requirements``. This includes any ``PYDEPS`` specified from a charm
-    library. It also changes the behaviour of ``charm-binary-python-packages`` to be a list of
-    packages to pass to ``pip`` that are allowed to use binary packages.
-    ``charm-strict-dependencies`` is mutually exclusive with ``charm-python-packages``.
-    """
     charm_entrypoint: str = "src/charm.py"
     charm_binary_python_packages: list[str] = []
-    charm_python_packages: list[str] = []
     charm_requirements: list[str] = []
+
+    @classmethod
+    def unmarshal(cls, data: dict[str, Any]):
+        """Populate charm properties from the part specification.
+
+        :param data: A dictionary containing part properties.
+
+        :return: The populated plugin properties data object.
+
+        :raise pydantic.ValidationError: If validation fails.
+        """
+        plugin_data = plugins.extract_plugin_properties(
+            data, plugin_name="charm", required=["source"]
+        )
+        if plugin_data.get("charm-strict-dependencies"):
+            return StrictCharmPluginProperties.parse_obj(plugin_data)
+        return LegacyCharmPluginProperties.parse_obj(plugin_data)
 
     @pydantic.validator("charm_entrypoint")
     def validate_entry_point(cls, charm_entrypoint, values):
@@ -97,75 +104,66 @@ class CharmPluginProperties(plugins.PluginProperties, plugins.PluginModel):
             if not reqs_path.is_file():
                 raise ValueError(f"requirements file {str(reqs_path)!r} not found")
 
-        is_strict = values.get("charm_strict_dependencies", False)
-        if is_strict:
-            try:
-                validate_strict_dependencies(
-                    get_requirements_file_package_names(
-                        *(pathlib.Path(r) for r in charm_requirements)
-                    ),
-                    values.get("charm_binary_python_packages", []),
-                )
-            except DependencyError as e:
-                raise ValueError(
-                    "All dependencies must be specified in requirements files for strict dependencies."
-                ) from e
-
         # Infer a default "requirements.txt"
         default_reqs_name = "requirements.txt"
         if not charm_requirements and (project_dirpath / default_reqs_name).is_file():
             charm_requirements.append(default_reqs_name)
 
-        if is_strict and not charm_requirements:
-            raise ValueError("'charm-strict-dependencies' requires at least one requirements file.")
-
         return charm_requirements
 
-    @pydantic.validator("charm_python_packages")
-    def _validate_source_packages(cls, charm_python_packages: list[str], values: dict[str, Any]):
+
+class LegacyCharmPluginProperties(CharmPluginProperties):
+    charm_python_packages: list[str] = []
+
+
+class StrictCharmPluginProperties(CharmPluginProperties):
+    charm_strict_dependencies: Literal[True] = True
+
+    @pydantic.root_validator()
+    def _validate_source_packages(cls, values: dict[str, Any]):
         """Validate charm-python-packages."""
-        is_strict = values.get("charm_strict_dependencies", False)
-        if is_strict and charm_python_packages:
+        if values.get("charm-python-packages"):
             raise ValueError(
                 "'charm-python-packages' must not be set if 'charm-strict-dependencies' is enabled"
             )
 
-        return charm_python_packages
+        return values
 
     @pydantic.validator("charm_binary_python_packages")
-    def _validate_binary_packages(cls, charm_binary_python_packages: list[str], values: dict[str, Any]):
+    def _validate_binary_packages(cls, charm_binary_python_packages: list[str]):
         """Validate binary python packages."""
-        is_strict = values.get("charm_strict_dependencies", False)
-        if is_strict:
-            invalid_binaries = set()
-            for binary_package in charm_binary_python_packages:
-                if not PACKAGE_NAME_REGEX.fullmatch(binary_package):
-                    invalid_binaries.add(binary_package)
+        invalid_binaries = set()
+        for binary_package in charm_binary_python_packages:
+            if not PACKAGE_NAME_REGEX.fullmatch(binary_package):
+                invalid_binaries.add(binary_package)
 
-            if invalid_binaries:
-                raise ValueError(
-                    "'charm-binary-python-packages' may contain only package names allowed "
-                    "to be installed from binary if 'charm-strict-dependencies' is enabled. "
-                    f"Invalid package names: {sorted(invalid_binaries)}"
-                )
+        if invalid_binaries:
+            raise ValueError(
+                "'charm-binary-python-packages' may contain only package names allowed "
+                "to be installed from binary if 'charm-strict-dependencies' is enabled. "
+                f"Invalid package names: {sorted(invalid_binaries)}"
+            )
 
         return charm_binary_python_packages
 
+    @pydantic.validator("charm_requirements")
+    def _validate_strict_requirements(cls, charm_requirements: list[str], values: dict[str, Any]):
+        if not charm_requirements:
+            raise ValueError("'charm-strict-dependencies' requires at least one requirements file.")
 
-    @classmethod
-    def unmarshal(cls, data: dict[str, Any]):
-        """Populate charm properties from the part specification.
+        try:
+            validate_strict_dependencies(
+                get_requirements_file_package_names(
+                    *(pathlib.Path(r) for r in charm_requirements)
+                ),
+                values.get("charm_binary_python_packages", []),
+            )
+        except DependencyError as e:
+            raise ValueError(
+                "All dependencies must be specified in requirements files for strict dependencies."
+            ) from e
 
-        :param data: A dictionary containing part properties.
-
-        :return: The populated plugin properties data object.
-
-        :raise pydantic.ValidationError: If validation fails.
-        """
-        plugin_data = plugins.extract_plugin_properties(
-            data, plugin_name="charm", required=["source"]
-        )
-        return cls(**plugin_data)
+        return charm_requirements
 
 
 class CharmPlugin(plugins.Plugin):
