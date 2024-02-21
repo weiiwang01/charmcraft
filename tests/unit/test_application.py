@@ -27,9 +27,9 @@ from charmcraft import application, errors
 @pytest.mark.parametrize(
     ("global_args", "expected_project_dir"),
     [
-        ({"project_dir": "."}, "."),
-        ({"project_dir": None}, "."),
-        ({"project_dir": "/some/project/directory"}, "/some/project/directory"),
+        ({"project_dir": "."}, "./build"),
+        ({"project_dir": None}, "./build"),
+        ({"project_dir": "/some/project/directory"}, "/some/project/directory/build"),
     ],
 )
 def test_configure(

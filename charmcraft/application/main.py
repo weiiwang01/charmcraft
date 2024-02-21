@@ -37,6 +37,7 @@ APP_METADATA = AppMetadata(
     name="charmcraft",
     summary=GENERAL_SUMMARY,
     ProjectClass=models.CharmcraftProject,  # type: ignore[arg-type]
+    source_ignore_patterns=["build/", "*.charm"],
 )
 
 
@@ -126,9 +127,8 @@ class Charmcraft(Application):
             # Do not do strict resolution here, as commands such as `init` will create
             # the project directory.
             project_dir = pathlib.Path(global_args.get("project_dir") or ".").resolve()
-            self._work_dir = project_dir
-        else:
-            self._work_dir = env.get_managed_environment_project_path()
+            # In destructive mode, charmcraft places work into a "build" subdirectory in the project directory.
+            self._work_dir = project_dir / const.BUILD_DIRNAME
 
     @property
     def app_config(self) -> dict[str, Any]:
