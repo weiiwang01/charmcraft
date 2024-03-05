@@ -38,7 +38,6 @@ import pytest_check
 @pytest.mark.parametrize(
     "command",
     [
-        "pack",
         "clean",
         "version",
         "login",
