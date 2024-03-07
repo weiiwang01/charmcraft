@@ -1,4 +1,4 @@
-# Copyright 2021-2022 Canonical Ltd.
+# Copyright 2021-2024 Canonical Ltd.
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU Lesser General Public
@@ -13,16 +13,33 @@
 # along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 """Charmcraft's reactive plugin for craft-parts."""
-
+import itertools
 import json
 import shlex
 import subprocess
-import sys
-from pathlib import Path
 from typing import Any, cast
 
 from craft_parts import plugins
 from craft_parts.errors import PluginEnvironmentValidationError
+
+RUN_CHARM_FUNCTION = """\
+run_charm(){
+    set +e
+    charm $@
+    retcode=$?
+    set -e
+    if (( $retcode == 0 )); then
+        echo "charm $1 result: SUCCESS"
+        return 0
+    elif (( 100 <= $retcode && $retcode < 200 )); then
+        echo "charm $1 result: WARNING ($retcode)" >&2
+        return 0
+    else
+        echo "charm $1 result: ERROR ($retcode)" >&2
+        return $retcode
+    fi
+}
+"""
 
 
 class ReactivePluginProperties(plugins.PluginProperties, plugins.PluginModel):
@@ -128,98 +145,22 @@ class ReactivePlugin(plugins.Plugin):
         """Return a list of commands to run during the build step."""
         options = cast(ReactivePluginProperties, self._options)
 
-        command = [
-            sys.executable,
-            "-I",
-            __file__,
-            self._part_info.project_name,
-            str(self._part_info.part_build_dir),
-            str(self._part_info.part_install_dir),
-        ]
         # The YAML List[str] schema would colocate any options with arguments
-        # in the same string.  This is not what we want as we need to send
+        # in the same string. This is not what we want as we need to send
         # these separately when calling out to the command later.
         #
         # Expand any such strings as we add them to the command.
-        for arg in options.reactive_charm_build_arguments:
-            command.extend(shlex.split(arg))
-        return [" ".join(shlex.quote(i) for i in command)]
-
-
-def run_charm_tool(args: list[str]):
-    """Run the charm tool, log and check exit code."""
-    result_classification = "SUCCESS"
-    exc = None
-
-    print(f"charm tool execution command={args}")
-    try:
-        completed_process = subprocess.run(args, check=True)
-    except subprocess.CalledProcessError as call_error:
-        exc = call_error
-        if call_error.returncode < 100 or call_error.returncode >= 200:
-            result_classification = "ERROR"
-            raise
-        result_classification = "WARNING"
-        print(f"charm tool execution {result_classification}: returncode={exc.returncode}")
-    else:
-        print(
-            f"charm tool execution {result_classification}: returncode={completed_process.returncode}"
+        args = itertools.chain.from_iterable(
+            shlex.split(arg) for arg in options.reactive_charm_build_arguments
         )
+        command_args = " ".join(shlex.quote(i) for i in args)
 
+        output_dir =  self._part_info.part_build_dir / self._part_info.project_name
 
-def build(
-    *, charm_name: str, build_dir: Path, install_dir: Path, charm_build_arguments: list[str]
-):
-    """Build a charm using charm tool.
-
-    The charm tool is used to build reactive charms, the build process
-    is as follows:
-
-    - Run charm proof to ensure the charm
-      would build with no errors (warnings are allowed)
-
-    - Link charm tool's build directory to the part lifecycle's
-      install_dir
-
-    - Run "charm build"
-
-    Note that no files/dirs in the original project are modified nor removed
-    because in that case the VCS will detect something changed and the version
-    string produced by `charm` would be misleading.
-    """
-    # Verify the charm is ok from a charm tool point of view.
-
-    try:
-        run_charm_tool(["charm", "proof"])
-    except subprocess.CalledProcessError as call_error:
-        return call_error.returncode
-
-    # Link the installation directory to the place where charm creates
-    # the charm.
-    charm_build_dir = build_dir / charm_name
-    if not charm_build_dir.exists():
-        charm_build_dir.symlink_to(install_dir, target_is_directory=True)
-
-    cmd = ["charm", "build"]
-    if charm_build_arguments:
-        cmd.extend(charm_build_arguments)
-    cmd.extend(["-o", str(build_dir)])
-
-    try:
-        run_charm_tool(cmd)
-    except subprocess.CalledProcessError as call_error:
-        return call_error.returncode
-    finally:
-        charm_build_dir.unlink()
-
-    return 0
-
-
-if __name__ == "__main__":
-    returncode = build(
-        charm_name=sys.argv[1],
-        build_dir=Path(sys.argv[2]),
-        install_dir=Path(sys.argv[3]),
-        charm_build_arguments=sys.argv[4:],
-    )
-    sys.exit(returncode)
+        return [
+            RUN_CHARM_FUNCTION,
+            "run_charm proof",
+            f"ln -sf {self._part_info.part_install_dir} {output_dir}",
+            f"run_charm build {command_args} -o {self._part_info.part_build_dir}",
+            f"rm -f {output_dir}"
+        ]
