@@ -187,7 +187,6 @@ def test_create_build_plan_complex(
     emitter, complex_base_config, mock_provider, mock_is_base_available
 ):
     """Verify creation of a complex build plan."""
-
     build_plan = providers.create_build_plan(
         bases=complex_base_config,
         bases_indices=None,
@@ -268,7 +267,8 @@ def test_create_build_plan_base_matches_host(
     simple_base_config,
 ):
     """Verify the first `build_on` Base that matches the host is used for the build plan
-    when building in managed mode or destructive mode."""
+    when building in managed mode or destructive mode.
+    """
     build_plan = providers.create_build_plan(
         bases=simple_base_config,
         bases_indices=None,

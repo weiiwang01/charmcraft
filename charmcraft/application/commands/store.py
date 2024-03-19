@@ -1567,17 +1567,15 @@ class FetchLibCommand(CharmcraftCommand):
                 error_message = (
                     f"Library {lib_data.full_name} has local changes, cannot be updated."
                 )
+            elif tip.content_hash == lib_data.content_hash:
+                error_message = (
+                    f"Library {lib_data.full_name} was already up to date in "
+                    f"version {tip.api:d}.{tip.patch:d}."
+                )
             else:
-                # same versions locally and in the store
-                if tip.content_hash == lib_data.content_hash:
-                    error_message = (
-                        f"Library {lib_data.full_name} was already up to date in "
-                        f"version {tip.api:d}.{tip.patch:d}."
-                    )
-                else:
-                    error_message = (
-                        f"Library {lib_data.full_name} has local changes, cannot be updated."
-                    )
+                error_message = (
+                    f"Library {lib_data.full_name} has local changes, cannot be updated."
+                )
             analysis.append((lib_data, error_message))
 
         full_lib_data = []

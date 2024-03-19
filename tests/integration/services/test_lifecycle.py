@@ -18,5 +18,4 @@
 
 def test_init_lifecycle(service_factory):
     """Test the setup of a parts lifecycle, implicitly testing setup."""
-
     service_factory.lifecycle._init_lifecycle_manager()

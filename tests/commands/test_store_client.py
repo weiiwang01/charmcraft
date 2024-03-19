@@ -103,7 +103,6 @@ class FakeResponse(requests.Response):
 @pytest.fixture()
 def client_class():
     """Return a client instance with craft-store's StoreClient methods mocked."""
-
     auth_patch = patch("craft_store.Auth.__init__", return_value=None)
     auth_patch.start()
 

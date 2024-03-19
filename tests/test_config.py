@@ -3092,7 +3092,7 @@ def test_schema_analysis_ignore_linter_missing(
 def test_actions_defined_in_charmcraft_yaml(
     tmp_path, prepare_charmcraft_yaml, prepare_metadata_yaml, charmcraft_yaml, metadata_yaml
 ):
-    """test actions defined in charmcraft.yaml"""
+    """Test actions defined in charmcraft.yaml"""
     prepare_charmcraft_yaml(charmcraft_yaml)
     prepare_metadata_yaml(metadata_yaml)
 
@@ -3192,7 +3192,7 @@ def test_actions_badly_defined_in_charmcraft_yaml(
     metadata_yaml,
     bad_name,
 ):
-    """test actions badly defined in charmcraft.yaml"""
+    """Test actions badly defined in charmcraft.yaml"""
     prepare_charmcraft_yaml(charmcraft_yaml_template.format(bad_name=bad_name))
     prepare_metadata_yaml(metadata_yaml)
 
@@ -3295,7 +3295,7 @@ def test_actions_defined_in_charmcraft_yaml_and_actions_yaml(
     charmcraft_yaml,
     metadata_yaml,
 ):
-    """actions section cannot be used when actions.yaml file is present."""
+    """Actions section cannot be used when actions.yaml file is present."""
     prepare_charmcraft_yaml(charmcraft_yaml)
     prepare_metadata_yaml(metadata_yaml)
     prepare_actions_yaml(

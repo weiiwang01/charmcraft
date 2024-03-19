@@ -94,16 +94,15 @@ def create_config_yaml(
         # In the build / test process, the original file may be the same as the target file.
         with contextlib.suppress(shutil.SameFileError):
             shutil.copyfile(original_file_path, target_file_path)
-    else:
-        if charmcraft_config.config:
-            target_file_path.write_text(
-                yaml.dump(
-                    charmcraft_config.config.dict(
-                        include={"options"}, exclude_none=True, by_alias=True
-                    )
+    elif charmcraft_config.config:
+        target_file_path.write_text(
+            yaml.dump(
+                charmcraft_config.config.dict(
+                    include={"options"}, exclude_none=True, by_alias=True
                 )
             )
-        else:
-            return None
+        )
+    else:
+        return None
 
     return target_file_path

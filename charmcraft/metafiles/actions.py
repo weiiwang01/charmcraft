@@ -99,16 +99,15 @@ def create_actions_yaml(
         # In the build / test process, the original file may be the same as the target file.
         with contextlib.suppress(shutil.SameFileError):
             shutil.copyfile(original_file_path, target_file_path)
-    else:
-        if charmcraft_config.actions:
-            target_file_path.write_text(
-                yaml.dump(
-                    charmcraft_config.actions.dict(
-                        include={"actions"}, exclude_none=True, by_alias=True
-                    )["actions"]
-                )
+    elif charmcraft_config.actions:
+        target_file_path.write_text(
+            yaml.dump(
+                charmcraft_config.actions.dict(
+                    include={"actions"}, exclude_none=True, by_alias=True
+                )["actions"]
             )
-        else:
-            return None
+        )
+    else:
+        return None
 
     return target_file_path

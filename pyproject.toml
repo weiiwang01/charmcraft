@@ -286,7 +286,6 @@ lint.extend-select = [
 ]
 lint.ignore = [
     "ANN10",  # Type annotations for `self` and `cls`
-    #"E203",  # Whitespace before ":"  -- Commented because ruff doesn't currently check E203
     "E501",  # Line too long (reason: black will automatically fix this for us)
     "D105",  # Missing docstring in magic method (reason: magic methods already have definitions)
     "D107",  # Missing docstring in __init__ (reason: documented in class docstring)
@@ -307,7 +306,7 @@ lint.ignore = [
     "FBT",
     "N805", "N806",
     "PGH003",
-    "PLR0912", "PLR0913", "PLR0915", "PLR1714", "PLR2004", "PLR5501",
+    "PLR0912", "PLR0913", "PLR0915", "PLR2004",
     "PLW2901",
     "PT007", "PT011",
     "PTH102", "PTH108", "PTH109", "PTH113", "PTH118", "PTH119", "PTH123",

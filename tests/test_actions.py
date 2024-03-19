@@ -25,7 +25,7 @@ from charmcraft.metafiles.actions import create_actions_yaml
 
 
 def test_create_actions_yaml(tmp_path, prepare_charmcraft_yaml):
-    """create actions.yaml."""
+    """Create actions.yaml."""
     actions = {
         "actions": {
             "pause": {"description": "Pause the database."},
@@ -79,7 +79,7 @@ def test_create_actions_yaml(tmp_path, prepare_charmcraft_yaml):
 
 
 def test_create_actions_yaml_none(tmp_path, prepare_charmcraft_yaml):
-    """create actions.yaml with None, the file should not exist."""
+    """Create actions.yaml with None, the file should not exist."""
     prepare_charmcraft_yaml(
         dedent(
             """
