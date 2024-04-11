@@ -1,31 +1,25 @@
-name: Large Manual Spread
+name: Large Weekly Spread
 on:
   schedule:
     # At 00:00 on Wednesday and Sunday.
     - cron: "0 0 * * WED,SUN"
 
   workflow_dispatch:
+    inputs:
+      snap_channel:
+        description: "Snap Channel"
+        default: "latest/edge"
+      git_ref:
+        description: "Git branch or ref"
+        default: "main"
+
+env:
+  snap_channel: ${{ github.event.inputs.snap_channel || 'latest/edge' }}
+  git_ref: ${{ github.event.inputs.git_ref || 'main' }}
 
 jobs:
-  snap-build:
-    runs-on: ubuntu-22.04
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: Build snap
-        uses: snapcore/action-build@v1
-        id: charmcraft
-      - name: Upload snap artifact
-        uses: actions/upload-artifact@v3
-        with:
-          name: snap
-          path: ${{ steps.charmcraft.outputs.snap }}
-
   pack-charm:
-    runs-on: self-hosted
-    needs: [snap-build]
+    runs-on: [spread-installed]
     strategy:
       fail-fast: false
       matrix:
@@ -40,11 +34,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ env.git_ref }}
           submodules: true
-      - name: Download snap artifact
-        uses: actions/download-artifact@v3
-        with:
-          name: snap
+      - name: Download snap
+        run: |
+          snap download --channel="${{ env.snap_channel }}" charmcraft
       - name: Spread k8s operator
         run: |
           spread google:ubuntu-22.04-64:tests/spread/charms/${{ matrix.charm }}
