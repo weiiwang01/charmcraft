@@ -66,6 +66,7 @@ def build_zip(zip_path: PathOrString, prime_dir: PathOrString) -> None:
     prime_dir = pathlib.Path(prime_dir).resolve()
     with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as file:
         for file_path in prime_dir.rglob("*"):
-            if not file_path.is_file():
-                continue
-            file.write(file_path, file_path.relative_to(prime_dir))
+            if file_path.is_dir():
+                file.writestr(f"{file_path.relative_to(prime_dir)}/", "")
+            if file_path.is_file():
+                file.write(file_path, file_path.relative_to(prime_dir))
